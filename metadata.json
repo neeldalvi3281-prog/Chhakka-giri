@@ -1,0 +1,6 @@
+{
+  "name": "Crisis Net",
+  "description": "Military-grade, cyber-tactical offline mesh communication terminal with E2EE channel cryptography, P2P mesh relay, and tactical geohash sector routing.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
