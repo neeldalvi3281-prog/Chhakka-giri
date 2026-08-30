@@ -186,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 "map" -> MapScreen(
+                                    repository = repository,
                                     onBack = { currentScreen = "terminal" },
                                     onSelectGeohash = { hash ->
                                         repository.handleInput("/geohash $hash")
