@@ -37,7 +37,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.MapView
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import com.aegis.mobile.data.MessageRepository
 import com.aegis.mobile.data.MessageType
 import com.aegis.mobile.mesh.GeohashUtils
@@ -87,6 +95,29 @@ fun MapScreen(
     // Active SOS Beacons from messages
     val activeSosList = remember(messages) {
         messages.filter { it.type == MessageType.ALERT_CRITICAL }
+    }
+
+    // Initialize osmdroid
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        Configuration.getInstance().userAgentValue = context.packageName
+    }
+
+    val mapView = remember {
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(false)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            
+            // Invert colors for Dark Tactical Mode
+            val inverseMatrix = ColorMatrix(floatArrayOf(
+                -1.0f, 0.0f, 0.0f, 0.0f, 255f,
+                0.0f, -1.0f, 0.0f, 0.0f, 255f,
+                0.0f, 0.0f, -1.0f, 0.0f, 255f,
+                0.0f, 0.0f, 0.0f, 1.0f, 0.0f
+            ))
+            overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(inverseMatrix))
+        }
     }
 
     // Initialize & Register GPS Listener
@@ -299,7 +330,27 @@ fun MapScreen(
                 .padding(padding)
                 .background(Color(0xFF05060A))
         ) {
-            // Interactive Vector Map Canvas
+            // Base OpenStreetMap Layer (Offline/Online)
+            AndroidView(
+                factory = { mapView },
+                modifier = Modifier.fillMaxSize(),
+                update = { view ->
+                    view.controller.setCenter(GeoPoint(mapCenterLat, mapCenterLng))
+                    // Map zoomScale (0.5 to 3.5) to OSM zoom levels (approx 13 to 17)
+                    val baseZoom = 14.5
+                    val zoomLevel = baseZoom + (Math.log(zoomScale.toDouble()) / Math.log(2.0))
+                    view.controller.setZoom(zoomLevel)
+                }
+            )
+
+            // Cyan tint overlay to blend OSM with the tactical theme
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(PhosphorCyan.copy(alpha = 0.08f))
+            )
+
+            // Interactive Vector Map Canvas (Overlays Grid and Radar)
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()

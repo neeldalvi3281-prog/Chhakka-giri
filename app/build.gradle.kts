@@ -90,4 +90,7 @@ dependencies {
 
     // WorkManager for background gateway sync
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // Offline Mapping (OSMDroid)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 }
