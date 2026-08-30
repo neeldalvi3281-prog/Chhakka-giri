@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Crisis Net</string>
+    <string name="app_name">Aegis Protocol</string>
     <string name="terminal_title">Tactical Mesh Terminal</string>
     <string name="channel_general">General</string>
     <string name="channel_emergency">Emergency SOS</string>

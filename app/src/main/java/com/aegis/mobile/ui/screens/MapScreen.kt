@@ -397,74 +397,8 @@ fun MapScreen(
                     strokeWidth = 1f
                 )
 
-                // 3. Draw 3x3 Geohash Sector Matrix
-                val cellSize = 120f * zoomScale
-                neighborCells.forEach { cell ->
-                    val cellCenterX = centerX + (cell.colOffset * cellSize)
-                    val cellCenterY = centerY - (cell.rowOffset * cellSize)
-                    val topLeft = Offset(cellCenterX - cellSize / 2f, cellCenterY - cellSize / 2f)
-
-                    val isCenter = cell.rowOffset == 0 && cell.colOffset == 0
-                    val isSelected = selectedSector == "#${cell.geohash}"
-
-                    // Background fill
-                    drawRect(
-                        color = when {
-                            isSelected -> PhosphorCyan.copy(alpha = 0.25f)
-                            isCenter -> PhosphorCyan.copy(alpha = 0.12f)
-                            else -> Color(0xFF0F172A).copy(alpha = 0.4f)
-                        },
-                        topLeft = topLeft,
-                        size = Size(cellSize, cellSize)
-                    )
-
-                    // Border
-                    drawRect(
-                        color = when {
-                            isSelected -> PhosphorCyan
-                            isCenter -> PhosphorCyan.copy(alpha = 0.8f)
-                            else -> PhosphorCyan.copy(alpha = 0.25f)
-                        },
-                        topLeft = topLeft,
-                        size = Size(cellSize, cellSize),
-                        style = Stroke(
-                            width = if (isSelected || isCenter) 2f else 1f,
-                            pathEffect = if (isCenter) null else PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f)
-                        )
-                    )
-
-                    // Sector text label via Android Native Paint
-                    val paint = android.graphics.Paint().apply {
-                        color = if (isSelected || isCenter) android.graphics.Color.CYAN else android.graphics.Color.LTGRAY
-                        textSize = 24f * (zoomScale.coerceIn(0.7f, 1.3f))
-                        typeface = android.graphics.Typeface.MONOSPACE
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                    }
-
-                    val subPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.GRAY
-                        textSize = 18f * (zoomScale.coerceIn(0.7f, 1.3f))
-                        typeface = android.graphics.Typeface.MONOSPACE
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                    }
-
-                    drawContext.canvas.nativeCanvas.drawText(
-                        "#${cell.geohash.uppercase()}",
-                        cellCenterX,
-                        cellCenterY - 6f,
-                        paint
-                    )
-
-                    drawContext.canvas.nativeCanvas.drawText(
-                        cell.label,
-                        cellCenterX,
-                        cellCenterY + 22f,
-                        subPaint
-                    )
-                }
-
+                // 3. Draw 3x3 Geohash Sector Matrix (Removed based on user request)
+                
                 // 4. Draw Peer Node Markers (if any connected)
                 peers.forEachIndexed { i, peer ->
                     val angle = (i * (360f / peers.size.coerceAtLeast(1))) * (Math.PI / 180f)

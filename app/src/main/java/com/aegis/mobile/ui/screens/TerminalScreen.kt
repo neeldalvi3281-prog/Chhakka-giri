@@ -84,7 +84,7 @@ fun TerminalScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Blue CN Badge (Triple-tap = Zeroize)
+                    // Blue AP Badge (Triple-tap = Zeroize)
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -100,7 +100,7 @@ fun TerminalScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "CN",
+                            text = "AP",
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Black,
                             fontSize = 15.sp,

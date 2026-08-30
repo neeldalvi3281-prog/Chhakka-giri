@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Crisis Net"
+rootProject.name = "Aegis Protocol"
 include(":app")

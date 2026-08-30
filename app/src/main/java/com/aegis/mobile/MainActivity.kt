@@ -97,82 +97,41 @@ class MainActivity : ComponentActivity() {
                                 .background(Color(0xFF0D0E12))
                                 .border(1.dp, Color(0xFF202636))
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left: Logo & Info
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF1E293B))
-                                        .border(1.dp, Color(0xFFFF3D71).copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("CN", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, color = Color(0xFFFF3D71))
-                                }
-                                Column {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text("CRISIS NET", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, color = Color.White)
-                                        Surface(
-                                            color = if (peers.isNotEmpty()) Color(0xFF22C55E).copy(alpha = 0.2f) else Color(0xFFFF3D71).copy(alpha = 0.2f),
-                                            border = androidx.compose.foundation.BorderStroke(
-                                                1.dp,
-                                                if (peers.isNotEmpty()) Color(0xFF22C55E).copy(alpha = 0.5f) else Color(0xFFFF3D71).copy(alpha = 0.4f)
-                                            ),
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text(
-                                                text = if (peers.isNotEmpty()) "MESH ACTIVE (${peers.size})" else "OFFLINE MESH",
-                                                fontSize = 8.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (peers.isNotEmpty()) Color(0xFF22C55E) else Color(0xFFFF3D71),
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                    Text("${userProfile.callSign} • ${peers.size} PEERS", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Color.Gray)
-                                }
-                            }
-
-                            // Right: Navigation Buttons
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                NavButton(
-                                    text = "TERM",
-                                    icon = Icons.Default.Terminal,
-                                    isActive = currentScreen == "terminal",
-                                    activeColor = Color(0xFF00E5FF),
-                                    onClick = { currentScreen = "terminal" }
-                                )
-                                NavButton(
-                                    text = "SOS",
-                                    icon = Icons.Default.Warning,
-                                    isActive = currentScreen == "sos",
-                                    activeColor = Color(0xFFFF3D71),
-                                    onClick = { currentScreen = "sos" }
-                                )
-                                NavButton(
-                                    text = "MAP",
-                                    icon = Icons.Default.Map,
-                                    isActive = currentScreen == "map",
-                                    activeColor = Color(0xFF00E5FF),
-                                    onClick = { currentScreen = "map" }
-                                )
-                                NavButton(
-                                    text = "PEERS",
-                                    icon = Icons.Default.Radio,
-                                    isActive = currentScreen == "peers",
-                                    activeColor = Color(0xFF22C55E),
-                                    onClick = { currentScreen = "peers" }
-                                )
-                            }
+                            NavButton(
+                                text = "TERM",
+                                icon = Icons.Default.Terminal,
+                                isActive = currentScreen == "terminal",
+                                activeColor = Color(0xFF00E5FF),
+                                modifier = Modifier.weight(1f),
+                                onClick = { currentScreen = "terminal" }
+                            )
+                            NavButton(
+                                text = "SOS",
+                                icon = Icons.Default.Warning,
+                                isActive = currentScreen == "sos",
+                                activeColor = Color(0xFFFF3D71),
+                                modifier = Modifier.weight(1f),
+                                onClick = { currentScreen = "sos" }
+                            )
+                            NavButton(
+                                text = "MAP",
+                                icon = Icons.Default.Map,
+                                isActive = currentScreen == "map",
+                                activeColor = Color(0xFF00E5FF),
+                                modifier = Modifier.weight(1f),
+                                onClick = { currentScreen = "map" }
+                            )
+                            NavButton(
+                                text = "PEERS",
+                                icon = Icons.Default.Radio,
+                                isActive = currentScreen == "peers",
+                                activeColor = Color(0xFF22C55E),
+                                modifier = Modifier.weight(1f),
+                                onClick = { currentScreen = "peers" }
+                            )
                         }
 
                         // Screen Content
@@ -243,19 +202,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun NavButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isActive: Boolean, activeColor: Color, onClick: () -> Unit) {
+fun NavButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isActive: Boolean, activeColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         color = if (isActive) activeColor else Color(0xFF15171E),
         border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) activeColor else Color(0xFF2B3444)),
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.clickable { onClick() }
+        modifier = modifier.clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.Center
         ) {
             Icon(icon, contentDescription = text, tint = if (isActive) Color.Black else activeColor, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isActive) Color.Black else activeColor, fontFamily = FontFamily.Monospace)
         }
     }
