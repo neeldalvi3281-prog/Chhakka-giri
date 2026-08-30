@@ -51,6 +51,7 @@ data class TacticalMeshPeer(
     val isConnected: Boolean = true,
     val keyFingerprint: String = "A4:9E:C1:2F",
     val hopDistance: Int = 1,
+    val hopCount: Int = 1,
     val batteryPercent: Int = 85
 )
 

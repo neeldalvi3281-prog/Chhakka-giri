@@ -20,10 +20,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aegis.mobile.ui.theme.GreenSuccess
-import com.aegis.mobile.ui.theme.NeutralGray
-import com.aegis.mobile.ui.theme.RedLight
-import com.aegis.mobile.ui.theme.RedPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +43,15 @@ fun SosScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Emergency SOS", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = {
+                    Text(
+                        "EMERGENCY SOS BEACON",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = Color(0xFFFF3D71)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -65,7 +69,7 @@ fun SosScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // TOP 60%: Giant Emergency SOS / Full Stop Button
+            // TOP: Giant Emergency SOS Button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -79,7 +83,7 @@ fun SosScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(240.dp)
+                            .size(220.dp)
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = if (isSent) {
@@ -123,9 +127,9 @@ fun SosScreen(
                                 imageVector = if (isSent) Icons.Default.Check else if (isListening) Icons.Default.Mic else Icons.Default.Warning,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(56.dp)
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = if (isSent) "SENT" else if (isListening) "RECORDING" else "SOS",
                                 fontSize = 32.sp,
@@ -152,11 +156,11 @@ fun SosScreen(
                 }
             }
 
-            // MIDDLE 20%: Description Area and GPS
+            // MIDDLE: Description Area and GPS
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.20f)
+                    .weight(0.25f)
                     .background(Color(0xFF0D1018))
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
@@ -191,10 +195,10 @@ fun SosScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = RedPrimary, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFFF3D71), modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "GPS: 37.7749° N, 122.4194° W (±8m)",
@@ -207,11 +211,11 @@ fun SosScreen(
                 }
             }
 
-            // BOTTOM 10%: Suggestions & Distress Tag Pills
+            // BOTTOM: Suggestions & Distress Tag Pills
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.10f)
+                    .weight(0.15f)
                     .background(Color(0xFF07080C))
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.CenterStart

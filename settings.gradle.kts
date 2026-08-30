@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "aegis-mobile"
+rootProject.name = "Crisis Net"
 include(":app")

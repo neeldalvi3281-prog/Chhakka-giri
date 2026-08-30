@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aegis.mobile"
+        applicationId = "com.aistudio.crisisnet.kxmqzt"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

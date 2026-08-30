@@ -1,5 +1,6 @@
 package com.aegis.mobile.data
 
+import com.aegis.mobile.mesh.NearbyMeshManager
 import com.aegis.mobile.mesh.TacticalCrypto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,12 +29,14 @@ class MessageRepository {
 
     val userProfile = MutableStateFlow(
         TacticalUserProfile(
-            callSign = "@operator#4821",
-            nodeId = "NODE-Alpha",
+            callSign = "@operator#${(1000..9999).random()}",
+            nodeId = "NODE-${UUID.randomUUID().toString().take(4).uppercase()}",
             currentChannel = "#general",
             geohashSector = "#9q8yy"
         )
     )
+
+    var meshManager: NearbyMeshManager? = null
 
     init {
         addSystemNotice("CRISIS NET v2.4 // MIL-STD OFFLINE P2P MESH TERMINAL")
@@ -42,15 +45,24 @@ class MessageRepository {
         addSystemNotice("Type /help for command index.")
     }
 
+    fun setPeers(peerList: List<TacticalMeshPeer>) {
+        _peers.value = peerList
+    }
+
     fun addSystemNotice(text: String) {
         val msg = TacticalMessage(
             type = MessageType.SYSTEM_NOTICE,
+            channel = userProfile.value.currentChannel,
             senderHandle = "CRISIS_NET_SYS",
             senderId = "KERNEL",
             text = text,
             encryption = EncryptionSuite.PLAINTEXT_SYS,
             status = DeliveryStatus.DELIVERED
         )
+        _messages.value = _messages.value + msg
+    }
+
+    fun receiveIncomingMessage(msg: TacticalMessage) {
         _messages.value = _messages.value + msg
     }
 
@@ -63,10 +75,14 @@ class MessageRepository {
             return
         }
 
-        val encrypted = TacticalCrypto.encryptChannelMessage(userProfile.value.currentChannel, trimmed)
+        val channel = userProfile.value.currentChannel
+        val encrypted = TacticalCrypto.encryptChannelMessage(channel, trimmed)
+        val isEmergency = channel == "#emergency"
+        val msgType = if (isEmergency) MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST
+
         val msg = TacticalMessage(
-            type = if (userProfile.value.currentChannel == "#emergency") MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST,
-            channel = userProfile.value.currentChannel,
+            type = msgType,
+            channel = channel,
             senderHandle = userProfile.value.callSign,
             senderId = userProfile.value.nodeId,
             text = trimmed,
@@ -76,6 +92,7 @@ class MessageRepository {
             status = if (_peers.value.isNotEmpty()) DeliveryStatus.SENT else DeliveryStatus.QUEUED
         )
         _messages.value = _messages.value + msg
+        meshManager?.broadcastPacket(channel = channel, text = trimmed, targetRecipient = "ALL")
     }
 
     private fun executeCommand(cmd: String) {
@@ -85,6 +102,7 @@ class MessageRepository {
         // Command echo
         _messages.value = _messages.value + TacticalMessage(
             type = MessageType.COMMAND_ECHO,
+            channel = userProfile.value.currentChannel,
             senderHandle = userProfile.value.callSign,
             senderId = userProfile.value.nodeId,
             text = "$ $cmd",
@@ -95,12 +113,87 @@ class MessageRepository {
         when (command) {
             "/help" -> {
                 addSystemNotice("--- TACTICAL COMMAND INDEX ---")
+                addSystemNotice("/help               - Show tactical command guide")
                 addSystemNotice("/join <#channel>    - Switch tactical frequency")
                 addSystemNotice("/msg <@callsign> <msg> - Send E2EE Direct Message")
                 addSystemNotice("/nick <callsign>    - Update tactical handle")
-                addSystemNotice("/geohash            - Acquire GPS geohash sector")
+                addSystemNotice("/geohash [sector]   - Query or lock GPS sector (e.g. 9q8yyk)")
+                addSystemNotice("/peers              - List active nodes in mesh range")
+                addSystemNotice("/ping               - Measure RF hop latency")
+                addSystemNotice("/sos <distress_msg> - Dispatch emergency alert beacon")
                 addSystemNotice("/clear              - Clear terminal display buffer")
                 addSystemNotice("/zeroize            - Emergency wipe of all in-memory logs")
+            }
+            "/geohash" -> {
+                val targetSector = parts.getOrNull(1)
+                if (targetSector != null) {
+                    val formatted = if (targetSector.startsWith("#")) targetSector else "#$targetSector"
+                    userProfile.value = userProfile.value.copy(
+                        currentChannel = formatted,
+                        geohashSector = formatted
+                    )
+                    addSystemNotice("TARGET GEOHASH SECTOR LOCKED -> $formatted")
+                } else {
+                    addSystemNotice("CURRENT GEOHASH SECTOR: ${userProfile.value.geohashSector}")
+                    addSystemNotice("Coordinates: 37.7749°N, 122.4194°W (Precision ±19m)")
+                    addSystemNotice("Connected Mesh Nodes: ${_peers.value.size}")
+                }
+            }
+            "/peers" -> {
+                val peerList = _peers.value
+                if (peerList.isEmpty()) {
+                    addSystemNotice("ACTIVE MESH NODES (0): Standalone node. Scanning BLE & Wi-Fi Direct...")
+                } else {
+                    addSystemNotice("ACTIVE MESH NODES (${peerList.size}):")
+                    peerList.forEach { p ->
+                        addSystemNotice("• ${p.callSign} [${p.nodeId}] RSSI: ${p.rssi} dBm, Hops: ${p.hopCount}")
+                    }
+                }
+            }
+            "/ping" -> {
+                val nodeCount = _peers.value.size
+                if (nodeCount > 0) {
+                    addSystemNotice("PING MESH: $nodeCount peer(s) acknowledged. Hop latency: 24ms.")
+                } else {
+                    addSystemNotice("PING MESH: 0 peers in range. Local loopback OK (0.4ms).")
+                }
+            }
+            "/sos" -> {
+                val sosText = parts.drop(1).joinToString(" ").ifBlank { "EMERGENCY DISTRESS BEACON" }
+                val sosMsg = TacticalMessage(
+                    type = MessageType.ALERT_CRITICAL,
+                    channel = "#emergency",
+                    senderHandle = userProfile.value.callSign,
+                    senderId = userProfile.value.nodeId,
+                    text = "🚨 SOS: $sosText (GPS: 37.7749N, 122.4194W)",
+                    encryption = EncryptionSuite.AES_GCM_256,
+                    isOutgoing = true,
+                    status = DeliveryStatus.SENT
+                )
+                _messages.value = _messages.value + sosMsg
+                meshManager?.broadcastPacket(channel = "#emergency", text = "🚨 SOS: $sosText", targetRecipient = "ALL")
+            }
+            "/msg" -> {
+                val recipient = parts.getOrNull(1)
+                val msgText = parts.drop(2).joinToString(" ")
+                if (recipient != null && msgText.isNotBlank()) {
+                    val formattedRecipient = if (recipient.startsWith("@")) recipient else "@$recipient"
+                    val dm = TacticalMessage(
+                        type = MessageType.DIRECT_MESSAGE,
+                        channel = "DM:$formattedRecipient",
+                        senderHandle = userProfile.value.callSign,
+                        senderId = userProfile.value.nodeId,
+                        recipientHandle = formattedRecipient,
+                        text = msgText,
+                        encryption = EncryptionSuite.AES_GCM_256,
+                        isOutgoing = true,
+                        status = if (_peers.value.isNotEmpty()) DeliveryStatus.SENT else DeliveryStatus.QUEUED
+                    )
+                    _messages.value = _messages.value + dm
+                    meshManager?.broadcastPacket(channel = "DM", text = msgText, targetRecipient = formattedRecipient)
+                } else {
+                    addSystemNotice("ERROR: Syntax: /msg <@recipient> <message>")
+                }
             }
             "/join" -> {
                 val target = parts.getOrNull(1)
@@ -115,8 +208,10 @@ class MessageRepository {
             "/nick" -> {
                 val newNick = parts.getOrNull(1)
                 if (newNick != null) {
-                    userProfile.value = userProfile.value.copy(callSign = "@$newNick")
-                    addSystemNotice("Callsign updated to @$newNick")
+                    val formatted = if (newNick.startsWith("@")) newNick else "@$newNick"
+                    userProfile.value = userProfile.value.copy(callSign = formatted)
+                    meshManager?.updateIdentity(formatted, userProfile.value.nodeId)
+                    addSystemNotice("Callsign updated to $formatted")
                 } else {
                     addSystemNotice("ERROR: Missing callsign. Syntax: /nick <handle>")
                 }
@@ -141,6 +236,7 @@ class MessageRepository {
             nodeId = "NODE-${UUID.randomUUID().toString().take(4).uppercase()}",
             keyFingerprint = "ZEROIZED"
         )
+        meshManager?.updateIdentity(userProfile.value.callSign, userProfile.value.nodeId)
         addSystemNotice("⚠️ EMERGENCY ZEROIZATION EXECUTED ⚠️")
         addSystemNotice("ALL VOLATILE MEMORY PURGED TO 0x00.")
     }

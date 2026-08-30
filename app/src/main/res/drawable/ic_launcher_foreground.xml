@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Outer Glowing Ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FF3D71"
+            android:strokeWidth="2.5"
+            android:pathData="M 54,24 A 30,30 0 1,0 54,84 A 30,30 0 1,0 54,24" />
+        <!-- Inner Signal Waves -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M 40,44 C 47,38 61,38 68,44" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:pathData="M 44,50 C 49,46 59,46 64,50" />
+        <!-- Central Tactical Diamond / Node -->
+        <path
+            android:fillColor="#FF3D71"
+            android:pathData="M 54,54 L 62,62 L 54,70 L 46,62 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M 54,58 L 58,62 L 54,66 L 50,62 Z" />
+        <!-- Node Crosshairs -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:pathData="M 54,34 L 54,42 M 54,74 L 54,82 M 34,54 L 42,54 M 74,54 L 82,54" />
+    </group>
+</vector>

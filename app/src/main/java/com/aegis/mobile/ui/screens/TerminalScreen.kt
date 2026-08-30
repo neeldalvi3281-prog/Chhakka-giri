@@ -48,9 +48,23 @@ fun TerminalScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    val visibleMessages = remember(messages, userProfile.currentChannel) {
+        messages.filter { msg ->
+            when (msg.type) {
+                MessageType.SYSTEM_NOTICE,
+                MessageType.COMMAND_ECHO,
+                MessageType.ALERT_CRITICAL,
+                MessageType.DIRECT_MESSAGE -> true
+                MessageType.CHANNEL_BROADCAST -> {
+                    msg.channel == null || msg.channel.equals(userProfile.currentChannel, ignoreCase = true)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(visibleMessages.size) {
+        if (visibleMessages.isNotEmpty()) {
+            listState.animateScrollToItem(visibleMessages.size - 1)
         }
     }
 
@@ -413,7 +427,7 @@ fun TerminalScreen(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(messages) { msg ->
+                        items(visibleMessages) { msg ->
                             val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(msg.timestamp))
 
                             when (msg.type) {
@@ -504,6 +518,92 @@ fun TerminalScreen(
                                     }
                                 }
 
+                                MessageType.DIRECT_MESSAGE -> {
+                                    if (msg.isOutgoing) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = Color(0xFF1B2A3D),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f))
+                                            ) {
+                                                Column(modifier = Modifier.padding(8.dp)) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(10.dp))
+                                                        Text(
+                                                            text = "DIRECT MESSAGE -> ${msg.recipientHandle ?: "PEER"}",
+                                                            fontFamily = FontFamily.Monospace,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 10.sp,
+                                                            color = Color(0xFF00E5FF)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = msg.text,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 12.sp,
+                                                        color = Color.White
+                                                    )
+                                                    Text(
+                                                        text = "E2EE • $timeStr",
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 9.sp,
+                                                        color = TextMuted,
+                                                        modifier = Modifier.padding(top = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.Start
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = Color(0xFF1E172E),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA855F7).copy(alpha = 0.6f))
+                                            ) {
+                                                Column(modifier = Modifier.padding(8.dp)) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFA855F7), modifier = Modifier.size(10.dp))
+                                                        Text(
+                                                            text = "DIRECT MESSAGE FROM ${msg.senderHandle}",
+                                                            fontFamily = FontFamily.Monospace,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 10.sp,
+                                                            color = Color(0xFFA855F7)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = msg.text,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 12.sp,
+                                                        color = Color.White
+                                                    )
+                                                    Text(
+                                                        text = "$timeStr • E2EE UNICAST",
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 9.sp,
+                                                        color = TextMuted,
+                                                        modifier = Modifier.padding(top = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 else -> {
                                     if (msg.isOutgoing) {
                                         Column(
@@ -585,7 +685,7 @@ fun TerminalScreen(
                 }
             }
         }
-    )}
+    }
 
     // Callsign Dialog
     if (isCallsignDialogOpen) {
