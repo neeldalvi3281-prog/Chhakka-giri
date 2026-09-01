@@ -48,7 +48,8 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private val repository = MessageRepository()
+    private lateinit var repository: MessageRepository
+    private lateinit var database: com.aegis.mobile.data.AppDatabase
     private var nearbyMeshManager: NearbyMeshManager? = null
 
     private val permissionLauncher = registerForActivityResult(
@@ -59,6 +60,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        database = com.aegis.mobile.data.AppDatabase.getDatabase(this)
+        repository = MessageRepository(this, database.messageDao())
 
         val user = repository.userProfile.value
         nearbyMeshManager = NearbyMeshManager(this, user.callSign, user.nodeId).apply {

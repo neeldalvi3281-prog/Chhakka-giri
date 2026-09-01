@@ -1,6 +1,8 @@
 package com.aegis.mobile.data
 
 import java.util.UUID
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
 enum class MessageType {
     CHANNEL_BROADCAST,
@@ -23,8 +25,9 @@ enum class DeliveryStatus {
     RELAYED
 }
 
+@Entity(tableName = "messages")
 data class TacticalMessage(
-    val id: String = UUID.randomUUID().toString(),
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val type: MessageType = MessageType.CHANNEL_BROADCAST,
     val channel: String? = "#general",
     val senderHandle: String,

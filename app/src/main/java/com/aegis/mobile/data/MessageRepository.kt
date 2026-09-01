@@ -1,17 +1,27 @@
 package com.aegis.mobile.data
 
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.aegis.mobile.mesh.NearbyMeshManager
 import com.aegis.mobile.mesh.TacticalCrypto
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.UUID
 
-class MessageRepository {
+class MessageRepository(private val context: Context, private val messageDao: MessageDao) {
 
-    // Strictly in-memory lists (Zero persistence on disk)
-    private val _messages = MutableStateFlow<List<TacticalMessage>>(emptyList())
-    val messages: StateFlow<List<TacticalMessage>> = _messages.asStateFlow()
+    private val repositoryScope = CoroutineScope(Dispatchers.IO)
+    
+    // UI state for messages
+    val messages: StateFlow<List<TacticalMessage>> = MutableStateFlow<List<TacticalMessage>>(emptyList())
+    private val _messages = messages as MutableStateFlow<List<TacticalMessage>>
 
     private val _peers = MutableStateFlow<List<TacticalMeshPeer>>(emptyList())
     val peers: StateFlow<List<TacticalMeshPeer>> = _peers.asStateFlow()
@@ -39,9 +49,15 @@ class MessageRepository {
     var meshManager: NearbyMeshManager? = null
 
     init {
-        addSystemNotice("CRISIS NET v2.4 // MIL-STD OFFLINE P2P MESH TERMINAL")
+        repositoryScope.launch {
+            messageDao.getAllMessages().collect { dbMessages ->
+                _messages.value = dbMessages
+            }
+        }
+        
+        addSystemNotice("CRISIS NET v2.5 // PERSISTENT NODE")
         addSystemNotice("CALLSIGN: ${userProfile.value.callSign} [NODE: ${userProfile.value.nodeId}]")
-        addSystemNotice("CIPHERS: AES-GCM-256 / RSA-2048 / ZERO-DISK-PERSISTENCE")
+        addSystemNotice("CIPHERS: AES-GCM-256 / RSA-2048 / ROOM-DB / INTERNET-BRIDGE")
         addSystemNotice("Type /help for command index.")
     }
 
@@ -53,17 +69,36 @@ class MessageRepository {
         val msg = TacticalMessage(
             type = MessageType.SYSTEM_NOTICE,
             channel = userProfile.value.currentChannel,
-            senderHandle = "CRISIS_NET_SYS",
+            senderHandle = "AEGIS_SYS",
             senderId = "KERNEL",
             text = text,
             encryption = EncryptionSuite.PLAINTEXT_SYS,
             status = DeliveryStatus.DELIVERED
         )
-        _messages.value = _messages.value + msg
+        repositoryScope.launch {
+            messageDao.insertMessage(msg)
+        }
     }
 
     fun receiveIncomingMessage(msg: TacticalMessage) {
-        _messages.value = _messages.value + msg
+        repositoryScope.launch {
+            messageDao.insertMessage(msg)
+        }
+        if (msg.type == MessageType.ALERT_CRITICAL) {
+            triggerSosSync()
+        }
+    }
+
+    private fun triggerSosSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+            
+        val workRequest = OneTimeWorkRequestBuilder<SosSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+            
+        WorkManager.getInstance(context).enqueue(workRequest)
     }
 
     fun handleInput(input: String) {
@@ -91,7 +126,10 @@ class MessageRepository {
             isOutgoing = true,
             status = if (_peers.value.isNotEmpty()) DeliveryStatus.SENT else DeliveryStatus.QUEUED
         )
-        _messages.value = _messages.value + msg
+        repositoryScope.launch {
+            messageDao.insertMessage(msg)
+        }
+        if (isEmergency) triggerSosSync()
         meshManager?.broadcastPacket(channel = channel, text = trimmed, targetRecipient = "ALL")
     }
 
@@ -100,15 +138,17 @@ class MessageRepository {
         val command = parts[0].lowercase()
 
         // Command echo
-        _messages.value = _messages.value + TacticalMessage(
-            type = MessageType.COMMAND_ECHO,
-            channel = userProfile.value.currentChannel,
-            senderHandle = userProfile.value.callSign,
-            senderId = userProfile.value.nodeId,
-            text = "$ $cmd",
-            encryption = EncryptionSuite.PLAINTEXT_SYS,
-            isOutgoing = true
-        )
+        repositoryScope.launch {
+            messageDao.insertMessage(TacticalMessage(
+                type = MessageType.COMMAND_ECHO,
+                channel = userProfile.value.currentChannel,
+                senderHandle = userProfile.value.callSign,
+                senderId = userProfile.value.nodeId,
+                text = "$ $cmd",
+                encryption = EncryptionSuite.PLAINTEXT_SYS,
+                isOutgoing = true
+            ))
+        }
 
         when (command) {
             "/help" -> {
@@ -170,7 +210,10 @@ class MessageRepository {
                     isOutgoing = true,
                     status = DeliveryStatus.SENT
                 )
-                _messages.value = _messages.value + sosMsg
+                repositoryScope.launch {
+                    messageDao.insertMessage(sosMsg)
+                }
+                triggerSosSync()
                 meshManager?.broadcastPacket(channel = "#emergency", text = "🚨 SOS: $sosText", targetRecipient = "ALL")
             }
             "/msg" -> {
@@ -189,7 +232,9 @@ class MessageRepository {
                         isOutgoing = true,
                         status = if (_peers.value.isNotEmpty()) DeliveryStatus.SENT else DeliveryStatus.QUEUED
                     )
-                    _messages.value = _messages.value + dm
+                    repositoryScope.launch {
+                        messageDao.insertMessage(dm)
+                    }
                     meshManager?.broadcastPacket(channel = "DM", text = msgText, targetRecipient = formattedRecipient)
                 } else {
                     addSystemNotice("ERROR: Syntax: /msg <@recipient> <message>")
@@ -217,7 +262,9 @@ class MessageRepository {
                 }
             }
             "/clear" -> {
-                _messages.value = emptyList()
+                repositoryScope.launch {
+                    messageDao.deleteAllMessages()
+                }
                 addSystemNotice("TERMINAL DISPLAY BUFFER CLEARED.")
             }
             "/zeroize" -> {
@@ -230,7 +277,9 @@ class MessageRepository {
     }
 
     fun emergencyZeroize() {
-        _messages.value = emptyList()
+        repositoryScope.launch {
+            messageDao.deleteAllMessages()
+        }
         _peers.value = emptyList()
         userProfile.value = userProfile.value.copy(
             nodeId = "NODE-${UUID.randomUUID().toString().take(4).uppercase()}",
@@ -238,6 +287,6 @@ class MessageRepository {
         )
         meshManager?.updateIdentity(userProfile.value.callSign, userProfile.value.nodeId)
         addSystemNotice("⚠️ EMERGENCY ZEROIZATION EXECUTED ⚠️")
-        addSystemNotice("ALL VOLATILE MEMORY PURGED TO 0x00.")
+        addSystemNotice("ALL SECURE STORAGE WIPED TO 0x00.")
     }
 }
