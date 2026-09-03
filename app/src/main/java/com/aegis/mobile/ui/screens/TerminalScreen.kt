@@ -508,12 +508,34 @@ fun TerminalScreen(
                                                 color = Color(0xFFFFB3C7),
                                                 modifier = Modifier.padding(vertical = 4.dp)
                                             )
-                                            Text(
-                                                text = "${msg.senderHandle} • HOP: ${msg.hopCount}",
-                                                fontFamily = FontFamily.Monospace,
-                                                fontSize = 10.sp,
-                                                color = TextMuted
-                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${msg.senderHandle} • HOP: ${msg.hopCount}",
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 10.sp,
+                                                    color = TextMuted
+                                                )
+                                                
+                                                val (statusBadgeText, statusBadgeColor) = when (msg.status) {
+                                                    DeliveryStatus.QUEUED -> Pair("SAVED LOCALLY", Color(0xFFFFB74D))
+                                                    DeliveryStatus.SENT -> Pair("BROADCASTING", PhosphorAlertRed)
+                                                    DeliveryStatus.RELAYED -> Pair("RELAYED", Color(0xFF40C4FF))
+                                                    DeliveryStatus.UPLOADED -> Pair("UPLOADED", PhosphorGreen)
+                                                    DeliveryStatus.DELIVERED -> Pair("DELIVERED", PhosphorGreen)
+                                                }
+                                                
+                                                Text(
+                                                    text = "[$statusBadgeText]",
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = statusBadgeColor
+                                                )
+                                            }
                                         }
                                     }
                                 }

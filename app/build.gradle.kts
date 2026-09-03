@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -18,6 +19,10 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "SUPABASE_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co\"")
+        buildConfigField("String", "SUPABASE_GATEWAY_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co/functions/v1/gateway-upload\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"\"")
     }
 
     buildTypes {
@@ -41,6 +46,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -93,4 +99,13 @@ dependencies {
     
     // Offline Mapping (OSMDroid)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
+
+    // Room Database
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+
+    // OkHttp for Internet Bridge
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

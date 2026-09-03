@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.charset.StandardCharsets
+import java.util.Collections
+import java.util.UUID
 
 class NearbyMeshManager(
     private val context: Context,
@@ -22,7 +24,8 @@ class NearbyMeshManager(
     companion object {
         private const val TAG = "NearbyMeshManager"
         private const val SERVICE_ID = "com.crisisnet.tactical.mesh"
-        private const val PROTOCOL_HEADER = "CRISIS_P2P_V1"
+        private const val PROTOCOL_V2_HEADER = "AEGIS_P2P_V2"
+        private const val PROTOCOL_V1_HEADER = "CRISIS_P2P_V1"
     }
 
     private val strategy = Strategy.P2P_CLUSTER
@@ -33,6 +36,9 @@ class NearbyMeshManager(
     private val peerMap = mutableMapOf<String, TacticalMeshPeer>()
     private val pendingEndpoints = mutableMapOf<String, String>()
 
+    private val processedMessageIds: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+    private val gcsFilter = GcsFilter()
+
     var onMessageReceived: ((TacticalMessage) -> Unit)? = null
     var onPeerStatusChanged: ((String) -> Unit)? = null
 
@@ -41,7 +47,6 @@ class NearbyMeshManager(
     fun updateIdentity(callSign: String, nodeId: String) {
         myCallSign = callSign
         myNodeId = nodeId
-        // Restart mesh with new identity
         stopMesh()
         startMesh()
     }
@@ -135,7 +140,6 @@ class NearbyMeshManager(
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.d(TAG, "Connection initiated with $endpointId (${connectionInfo.endpointName})")
             pendingEndpoints[endpointId] = connectionInfo.endpointName
-            // Automatically accept incoming connections
             connectionsClient.acceptConnection(endpointId, payloadCallback)
         }
 
@@ -182,102 +186,119 @@ class NearbyMeshManager(
 
             try {
                 val rawStr = String(bytes, StandardCharsets.UTF_8)
-                val parts = rawStr.split("|", limit = 6)
-                
-                // Check if packet matches protocol
-                if (parts.size >= 6 && parts[0] == PROTOCOL_HEADER) {
+                val parts = rawStr.split("|")
+                val header = parts.getOrNull(0)
+
+                if (header == PROTOCOL_V2_HEADER && parts.size >= 14) {
                     val channel = parts[1]
                     val senderCallSign = parts[2]
                     val senderNodeId = parts[3]
                     val targetRecipient = parts[4]
                     val messageText = parts[5]
+                    val messageId = parts[6]
+                    val victimId = parts[7].ifBlank { null }
+                    val originDeviceId = parts[8].ifBlank { null }
+                    val latitude = parts[9].toDoubleOrNull()
+                    val longitude = parts[10].toDoubleOrNull()
+                    val ttl = parts[11].toIntOrNull() ?: 7
+                    val incomingHopCount = parts[12].toIntOrNull() ?: 0
+                    val timestamp = parts[13].toLongOrNull() ?: System.currentTimeMillis()
 
-                    // Filter Private Messages:
-                    val isPrivate = targetRecipient != "ALL"
-                    if (isPrivate) {
-                        val cleanTarget = targetRecipient.removePrefix("@").trim()
-                        val cleanMyCallSign = myCallSign.removePrefix("@").trim()
-                        val cleanMyNodeId = myNodeId.trim()
-
-                        val isForMe = cleanTarget.equals(cleanMyCallSign, ignoreCase = true) ||
-                                      cleanTarget.equals(cleanMyNodeId, ignoreCase = true)
-
-                        if (isForMe) {
-                            // Deliver E2EE Direct Message to this device
-                            val dmMsg = TacticalMessage(
-                                type = MessageType.DIRECT_MESSAGE,
-                                channel = "DM:$senderCallSign",
-                                senderHandle = senderCallSign,
-                                senderId = senderNodeId,
-                                recipientHandle = myCallSign,
-                                recipientId = myNodeId,
-                                text = messageText,
-                                encryption = EncryptionSuite.AES_GCM_256,
-                                isOutgoing = false,
-                                status = DeliveryStatus.DELIVERED,
-                                hopCount = 1
-                            )
-                            onMessageReceived?.invoke(dmMsg)
-                        } else {
-                            // Private message is for another peer. Do NOT show in this user's chat!
-                            Log.d(TAG, "Ignored private message addressed to $targetRecipient")
-                        }
-                    } else {
-                        // Broadcast / Channel message
-                        val isEmergency = channel == "#emergency" || messageText.startsWith("🚨 SOS")
-                        val msgType = if (isEmergency) MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST
-
-                        val msg = TacticalMessage(
-                            type = msgType,
-                            channel = channel,
-                            senderHandle = senderCallSign,
-                            senderId = senderNodeId,
-                            text = messageText,
-                            encryption = EncryptionSuite.AES_GCM_256,
-                            isOutgoing = false,
-                            status = DeliveryStatus.DELIVERED,
-                            hopCount = 1
-                        )
-                        onMessageReceived?.invoke(msg)
+                    // Store-and-Forward / DTN Deduplication
+                    if (processedMessageIds.contains(messageId) || gcsFilter.contains(messageId)) {
+                        Log.d(TAG, "Ignoring already processed message: $messageId")
+                        return
                     }
+
+                    processedMessageIds.add(messageId)
+                    gcsFilter.add(messageId)
+
+                    val newHopCount = incomingHopCount + 1
+
+                    // Check if private or broadcast
+                    val isPrivate = targetRecipient != "ALL"
+                    val isEmergency = channel == "#emergency" || messageText.startsWith("🚨 SOS") || messageText.contains("[SOS DISTRESS]")
+                    val msgType = when {
+                        isEmergency -> MessageType.ALERT_CRITICAL
+                        isPrivate -> MessageType.DIRECT_MESSAGE
+                        else -> MessageType.CHANNEL_BROADCAST
+                    }
+
+                    val incomingMsg = TacticalMessage(
+                        id = messageId,
+                        type = msgType,
+                        channel = channel,
+                        senderHandle = senderCallSign,
+                        senderId = senderNodeId,
+                        recipientHandle = if (isPrivate) targetRecipient else null,
+                        recipientId = if (isPrivate) targetRecipient else null,
+                        victimId = victimId,
+                        originDeviceId = originDeviceId,
+                        latitude = latitude,
+                        longitude = longitude,
+                        text = messageText,
+                        timestamp = timestamp,
+                        encryption = EncryptionSuite.AES_GCM_256,
+                        isOutgoing = false,
+                        status = DeliveryStatus.RELAYED,
+                        ttl = ttl,
+                        hopCount = newHopCount
+                    )
+
+                    // Re-relay to mesh peers if TTL allows and not private for someone else
+                    if (newHopCount < ttl && !isPrivate) {
+                        relayPacket(incomingMsg, excludeEndpointId = endpointId)
+                    }
+
+                    // Deliver locally
+                    if (!isPrivate || isAddressedToMe(targetRecipient)) {
+                        onMessageReceived?.invoke(incomingMsg)
+                    }
+
+                } else if (header == PROTOCOL_V1_HEADER && parts.size >= 6) {
+                    val channel = parts[1]
+                    val senderCallSign = parts[2]
+                    val senderNodeId = parts[3]
+                    val targetRecipient = parts[4]
+                    val messageText = parts[5]
+                    val pseudoId = "v1-${senderNodeId}-${messageText.hashCode()}"
+
+                    if (!processedMessageIds.add(pseudoId)) return
+
+                    val isEmergency = channel == "#emergency" || messageText.startsWith("🚨 SOS")
+                    val incomingMsg = TacticalMessage(
+                        id = pseudoId,
+                        type = if (isEmergency) MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST,
+                        channel = channel,
+                        senderHandle = senderCallSign,
+                        senderId = senderNodeId,
+                        text = messageText,
+                        isOutgoing = false,
+                        status = DeliveryStatus.RELAYED,
+                        hopCount = 1
+                    )
+                    onMessageReceived?.invoke(incomingMsg)
                 } else if (parts.size >= 3) {
-                    // Backward compatibility for legacy payload: channel|sender|text
+                    // Legacy fallback
                     val channel = parts[0]
                     val sender = parts[1]
                     val text = parts[2]
-                    
+                    val pseudoId = "legacy-${sender}-${text.hashCode()}"
+                    if (!processedMessageIds.add(pseudoId)) return
+
                     val isEmergency = channel == "#emergency" || text.startsWith("🚨 SOS")
-                    val isDm = channel.startsWith("DM:")
-                    
-                    if (isDm) {
-                        val target = channel.removePrefix("DM:").removePrefix("@").trim()
-                        val cleanMyCall = myCallSign.removePrefix("@").trim()
-                        if (target.equals(cleanMyCall, ignoreCase = true)) {
-                            val msg = TacticalMessage(
-                                type = MessageType.DIRECT_MESSAGE,
-                                channel = channel,
-                                senderHandle = sender,
-                                senderId = endpointId,
-                                text = text,
-                                isOutgoing = false,
-                                status = DeliveryStatus.DELIVERED,
-                                hopCount = 1
-                            )
-                            onMessageReceived?.invoke(msg)
-                        }
-                    } else {
-                        val msg = TacticalMessage(
-                            type = if (isEmergency) MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST,
-                            channel = channel,
-                            senderHandle = sender,
-                            senderId = endpointId,
-                            text = text,
-                            isOutgoing = false,
-                            status = DeliveryStatus.DELIVERED,
-                            hopCount = 1
-                        )
-                        onMessageReceived?.invoke(msg)
-                    }
+                    val incomingMsg = TacticalMessage(
+                        id = pseudoId,
+                        type = if (isEmergency) MessageType.ALERT_CRITICAL else MessageType.CHANNEL_BROADCAST,
+                        channel = channel,
+                        senderHandle = sender,
+                        senderId = endpointId,
+                        text = text,
+                        isOutgoing = false,
+                        status = DeliveryStatus.RELAYED,
+                        hopCount = 1
+                    )
+                    onMessageReceived?.invoke(incomingMsg)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing incoming payload: ${e.message}", e)
@@ -287,9 +308,34 @@ class NearbyMeshManager(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
     }
 
-    fun broadcastPacket(channel: String, text: String, targetRecipient: String = "ALL") {
+    private fun isAddressedToMe(targetRecipient: String): Boolean {
+        val cleanTarget = targetRecipient.removePrefix("@").trim()
+        val cleanMyCall = myCallSign.removePrefix("@").trim()
+        val cleanMyNode = myNodeId.trim()
+        return cleanTarget.equals(cleanMyCall, ignoreCase = true) || cleanTarget.equals(cleanMyNode, ignoreCase = true)
+    }
+
+    private fun relayPacket(msg: TacticalMessage, excludeEndpointId: String) {
         try {
-            val payloadStr = "$PROTOCOL_HEADER|$channel|$myCallSign|$myNodeId|$targetRecipient|$text"
+            val payloadStr = formatV2Payload(msg, targetRecipient = "ALL")
+            val payload = Payload.fromBytes(payloadStr.toByteArray(StandardCharsets.UTF_8))
+            val targets = peerMap.keys.filter { it != excludeEndpointId }
+            if (targets.isNotEmpty()) {
+                connectionsClient.sendPayload(targets, payload).addOnFailureListener { e ->
+                    Log.w(TAG, "Failed relaying packet to peers: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error relaying packet: ${e.message}", e)
+        }
+    }
+
+    fun broadcastMessage(msg: TacticalMessage, targetRecipient: String = "ALL") {
+        try {
+            processedMessageIds.add(msg.id)
+            gcsFilter.add(msg.id)
+
+            val payloadStr = formatV2Payload(msg, targetRecipient)
             val payload = Payload.fromBytes(payloadStr.toByteArray(StandardCharsets.UTF_8))
             val targets = peerMap.keys.toList()
             if (targets.isNotEmpty()) {
@@ -297,10 +343,31 @@ class NearbyMeshManager(
                     Log.w(TAG, "Failed sending payload to peers: ${e.message}")
                 }
             } else {
-                Log.d(TAG, "No peers currently connected. Packet queued locally.")
+                Log.d(TAG, "No peers currently connected. Packet queued locally in Room.")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in broadcastPacket: ${e.message}", e)
+            Log.e(TAG, "Error in broadcastMessage: ${e.message}", e)
         }
+    }
+
+    fun broadcastPacket(channel: String, text: String, targetRecipient: String = "ALL") {
+        val msg = TacticalMessage(
+            id = UUID.randomUUID().toString(),
+            channel = channel,
+            senderHandle = myCallSign,
+            senderId = myNodeId,
+            text = text,
+            isOutgoing = true,
+            status = DeliveryStatus.SENT
+        )
+        broadcastMessage(msg, targetRecipient)
+    }
+
+    private fun formatV2Payload(msg: TacticalMessage, targetRecipient: String): String {
+        val latStr = msg.latitude?.toString() ?: ""
+        val lngStr = msg.longitude?.toString() ?: ""
+        val victimStr = msg.victimId ?: ""
+        val originStr = msg.originDeviceId ?: ""
+        return "$PROTOCOL_V2_HEADER|${msg.channel.orEmpty()}|${msg.senderHandle}|${msg.senderId}|$targetRecipient|${msg.text}|${msg.id}|$victimStr|$originStr|$latStr|$lngStr|${msg.ttl}|${msg.hopCount}|${msg.timestamp}"
     }
 }
