@@ -19,6 +19,10 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "SUPABASE_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co\"")
+        buildConfigField("String", "SUPABASE_GATEWAY_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co/functions/v1/gateway-upload\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"\"")
     }
 
     buildTypes {
@@ -42,6 +46,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

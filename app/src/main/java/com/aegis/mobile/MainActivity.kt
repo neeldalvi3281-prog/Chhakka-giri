@@ -1,9 +1,15 @@
 package com.aegis.mobile
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -51,11 +56,23 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: MessageRepository
     private lateinit var database: com.aegis.mobile.data.AppDatabase
     private var nearbyMeshManager: NearbyMeshManager? = null
+    private var locationManager: LocationManager? = null
+
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            repository.updateLocation(location.latitude, location.longitude)
+        }
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         nearbyMeshManager?.startMesh()
+        startLocationUpdates()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +80,7 @@ class MainActivity : ComponentActivity() {
         
         database = com.aegis.mobile.data.AppDatabase.getDatabase(this)
         repository = MessageRepository(this, database.messageDao())
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
         val user = repository.userProfile.value
         nearbyMeshManager = NearbyMeshManager(this, user.callSign, user.nodeId).apply {
@@ -82,6 +100,7 @@ class MainActivity : ComponentActivity() {
         }
 
         requestRequiredPermissions()
+        startLocationUpdates()
 
         setContent {
             CrisisNetTheme {
@@ -142,9 +161,10 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.weight(1f)) {
                             when (currentScreen) {
                                 "sos" -> SosScreen(
+                                    repository = repository,
                                     onBack = { currentScreen = "terminal" },
                                     onSendSos = { sosMsg ->
-                                        repository.handleInput("/sos $sosMsg")
+                                        repository.sendSos(sosMsg)
                                         currentScreen = "terminal"
                                     }
                                 )
@@ -167,6 +187,32 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            ) {
+                locationManager?.let { lm ->
+                    val lastGps = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    val lastNet = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    val best = lastGps ?: lastNet
+                    if (best != null) {
+                        repository.updateLocation(best.latitude, best.longitude)
+                    }
+
+                    if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10000L, 10f, locationListener)
+                    } else if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                        lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10000L, 10f, locationListener)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Location provider init note: ${e.message}")
         }
     }
 
@@ -201,6 +247,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            locationManager?.removeUpdates(locationListener)
+        } catch (e: Exception) {
+            // Ignored
+        }
         nearbyMeshManager?.stopMesh()
     }
 }
