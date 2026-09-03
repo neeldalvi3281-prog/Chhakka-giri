@@ -22,7 +22,9 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co\"")
         buildConfigField("String", "SUPABASE_GATEWAY_URL", "\"https://hohtqhfvoeudftaalyqm.supabase.co/functions/v1/gateway-upload\"")
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"\"")
+        // Legacy anon JWT (not the sb_publishable_ key): the gateway-upload
+        // edge function runs with JWT verification, which requires a JWT.
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvaHRxaGZ2b2V1ZGZ0YWFseXFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNjEyODMsImV4cCI6MjEwMzgzNzI4M30.nhWXROanI_mFI1Big6OcRiCPpmtVTeIw7F-VvLL6AvQ\"")
     }
 
     buildTypes {

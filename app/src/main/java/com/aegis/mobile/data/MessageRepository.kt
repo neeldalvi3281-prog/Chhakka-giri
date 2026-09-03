@@ -61,7 +61,7 @@ class MessageRepository(private val context: Context, private val messageDao: Me
         
         addSystemNotice("AEGIS PROTOCOL v3.0 // SECURE NODE")
         addSystemNotice("CALLSIGN: ${userProfile.value.callSign} [NODE: ${userProfile.value.nodeId}]")
-        addSystemNotice("DEVICE ID: ${identityManager.deviceId} | VICTIM ID: ${identityManager.victimId}")
+        addSystemNotice("DEVICE ID: ${identityManager.deviceLabel} | VICTIM ID: ${identityManager.victimLabel}")
         addSystemNotice("CIPHERS: AES-GCM-256 / ROOM-PERSIST / STORE-AND-FORWARD / GATEWAY-SYNC")
         addSystemNotice("Type /help for command index.")
     }

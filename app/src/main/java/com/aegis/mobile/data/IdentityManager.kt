@@ -23,11 +23,14 @@ class IdentityManager(context: Context) {
         const val DEFAULT_GATEWAY_URL = "https://hohtqhfvoeudftaalyqm.supabase.co/functions/v1/gateway-upload"
     }
 
+    // Stable UUID identities used across the mesh wire protocol, Room storage
+    // and the Supabase gateway-upload API (DB columns are uuid type).
+    // Short DEV-/VIC- labels are display-only (see deviceLabel/victimLabel).
     val deviceId: String
         get() {
             var id = prefs.getString(KEY_DEVICE_ID, null)
-            if (id.isNullOrBlank()) {
-                id = "DEV-${UUID.randomUUID().toString().take(8).uppercase()}"
+            if (id.isNullOrBlank() || !isUuid(id)) {
+                id = UUID.randomUUID().toString()
                 prefs.edit().putString(KEY_DEVICE_ID, id).apply()
             }
             return id
@@ -36,12 +39,23 @@ class IdentityManager(context: Context) {
     val victimId: String
         get() {
             var id = prefs.getString(KEY_VICTIM_ID, null)
-            if (id.isNullOrBlank()) {
-                id = "VIC-${UUID.randomUUID().toString().take(8).uppercase()}"
+            if (id.isNullOrBlank() || !isUuid(id)) {
+                id = UUID.randomUUID().toString()
                 prefs.edit().putString(KEY_VICTIM_ID, id).apply()
             }
             return id
         }
+
+    // Short human-readable labels for terminal display only.
+    val deviceLabel: String get() = "DEV-${deviceId.take(8).uppercase()}"
+    val victimLabel: String get() = "VIC-${victimId.take(8).uppercase()}"
+
+    private fun isUuid(value: String): Boolean = try {
+        UUID.fromString(value)
+        true
+    } catch (_: IllegalArgumentException) {
+        false
+    }
 
     var nodeId: String
         get() {
@@ -86,8 +100,8 @@ class IdentityManager(context: Context) {
         }
 
     fun resetIdentity() {
-        val newDevId = "DEV-${UUID.randomUUID().toString().take(8).uppercase()}"
-        val newVicId = "VIC-${UUID.randomUUID().toString().take(8).uppercase()}"
+        val newDevId = UUID.randomUUID().toString()
+        val newVicId = UUID.randomUUID().toString()
         val newNodeId = "NODE-${UUID.randomUUID().toString().take(4).uppercase()}"
         val newCallSign = "@operator#${(1000..9999).random()}"
         
