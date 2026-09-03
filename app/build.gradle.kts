@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aistudio.crisisnet.kxmqzt"
+        applicationId = "com.citchat.chhakka"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
